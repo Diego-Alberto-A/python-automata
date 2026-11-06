@@ -1,0 +1,33 @@
+# Python and local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Compiled native renderer (build from the checked-in C++ source)
+*.dll
+*.so
+*.dylib
+*.o
+/v2/graphics_abstraction/native/*.obj
+*.a
+*.lib
+*.exe
+
+# Generated screenshots and benchmark results, not model assets
+/v2/*.ppm
+/v2/*preview.png
+/v2/resize_check.*
+/v2/performance*.json
+
+# Local settings and credentials
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

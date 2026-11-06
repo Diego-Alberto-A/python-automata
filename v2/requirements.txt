@@ -1,1 +1,4 @@
-pygame>=2.5,<3
+pygame==2.6.1
+agentpy==0.1.5
+numpy>=1.26,<2
+SALib==1.4.7

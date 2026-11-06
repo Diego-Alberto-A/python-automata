@@ -11,6 +11,6 @@ if not compiler:
 output = root / ('bresenham.dll' if os.name == 'nt' else 'libbresenham.so')
 command = [compiler, '-std=c++17', '-O3', '-ffp-contract=off', '-shared',
            str(root / 'bresenham.cpp'), '-o', str(output)]
-command += ['-static-libgcc', '-static-libstdc++'] if os.name == 'nt' else ['-fPIC']
+command += ['-static', '-static-libgcc', '-static-libstdc++'] if os.name == 'nt' else ['-fPIC']
 subprocess.run(command, check=True)
 print(f'Built {output}')

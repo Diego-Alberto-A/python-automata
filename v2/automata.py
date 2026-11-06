@@ -1,25 +1,10 @@
-"""User's collection automata, with a small stdlib runtime for live 3D playback.
-Robot decisions are retained from the supplied AgentPy model. No plotting or history.
-"""
+"""AgentPy collection model, with individual-turn playback for the 3D viewer."""
 from collections import deque
-from random import Random
-from types import SimpleNamespace
+import agentpy as ap
 
 
-class CellGrid:
-    def __init__(self):
-        self.positions = {}
-
-    def add_agents(self, agents, positions):
-        self.positions.update(zip(agents, positions))
-
-    def move_to(self, agent, position):
-        self.positions[agent] = position
-
-
-class Robot:
-    def __init__(self, model):
-        self.model = model
+class Robot(ap.Agent):
+    def setup(self):
         self.indice = 0
         self.cargando = False
         self.entregados = 0
@@ -239,18 +224,16 @@ class Robot:
             self.recoger()
 
 
-class ModeloRecoleccion:
+class ModeloRecoleccion(ap.Model):
     def __init__(self, tamano=20, robots=7, cubos=20, radio_vision=2, seed=42, steps=40000):
         if any(not isinstance(v, int) for v in (tamano, robots, cubos, radio_vision, steps)):
             raise ValueError('Grid parameters must be integers')
         if steps < 1:
             raise ValueError('Step limit must be positive')
-        self.p = SimpleNamespace(tamano=tamano, robots=robots, cubos=cubos,
-                                 radio_vision=radio_vision, steps=steps)
-        self.random = Random(seed)
-        self.t = 0
+        super().__init__(dict(tamano=tamano, robots=robots, cubos=cubos,
+                              radio_vision=radio_vision, seed=seed, steps=steps))
         self.turn = 0
-        self.setup()
+        self.sim_setup()
 
     @property
     def complete(self):
@@ -258,27 +241,50 @@ class ModeloRecoleccion:
 
     @property
     def finished(self):
-        return self.complete or self.t >= self.p.steps
+        return not self.running or (self.turn == 0 and self.complete)
 
     def advance_agent(self):
-        """One sequential turn, preserving AgentPy's rotating order (first t=1)."""
+        """Animate one AgentPy agent turn without precomputing future decisions.
+
+        Equivalent to sim_step split across frames: increment t once per round,
+        run agents in the supplied rotating order, then update/stop the model.
+        """
         if self.finished:
             return None
-        robot = self.robots[(self.t + 1 + self.turn) % len(self.robots)]
+        if self.turn == 0:
+            self.t += 1
+        robot = self.robots[(self.t + self.turn) % len(self.robots)]
         before = (robot.posicion(), robot.cargando)
         robot.actuar()
         self.turn += 1
         if self.turn == len(self.robots):
-            self.t += 1
             self.turn = 0
+            self.update()
+            if self.complete or self.t >= self._steps:
+                self.stop()
+                self.end()
         return robot.indice, before, (robot.posicion(), robot.cargando)
 
     def step(self):
-        round_number = self.t
-        while not self.finished and self.t == round_number:
-            self.advance_agent()
+        """Standard AgentPy full-round hook, used by sim_step() and run()."""
+        if self.turn:
+            raise RuntimeError('Finish the current playback round before using sim_step/run')
+        cantidad = len(self.robots)
+        inicio = self.t % cantidad
+        for desplazamiento in range(cantidad):
+            self.robots[(inicio + desplazamiento) % cantidad].actuar()
+        if self.complete:
+            self.stop()
+
+    def end(self):
+        self.report('entregados', self.entregados)
+        self.report('pasos', self.t)
+        self.report('bloqueos', sum(r.bloqueos for r in self.robots))
 
     def setup(self):
+        # AgentPy calls setup again when run() resumes an initialized model.
+        if hasattr(self, 'grid'):
+            return
         n = int(self.p.tamano)
         cantidad = int(self.p.robots)
         if n < 3 or not 1 <= cantidad <= n:
@@ -286,12 +292,12 @@ class ModeloRecoleccion:
         if self.p.radio_vision < 0:
             raise ValueError("El radio de visión no puede ser negativo.")
 
-        self.grid = CellGrid()
+        self.grid = ap.Grid(self, (n, n))
         self.deposito = (0, 0)
         self.entregados = 0
         self.ocupadas = {}
 
-        self.robots = [Robot(self) for _ in range(cantidad)]
+        self.robots = ap.AgentList(self, cantidad, Robot)
         filas_barrido = list(range(min(2, n - 1), n, 4))
         if n - 1 - filas_barrido[-1] > 2:
             filas_barrido.append(n - 1)

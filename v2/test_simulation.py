@@ -1,4 +1,5 @@
 import unittest
+import agentpy as ap
 from pathlib import Path
 from automata import ModeloRecoleccion
 from simulation_view import CELL_SIZE, cell_center, SimulationView
@@ -7,6 +8,26 @@ from free_camera import FreeCamera
 
 
 class AutomataTests(unittest.TestCase):
+    def test_real_agentpy_and_playback_match_full_rounds(self):
+        playback, full = ModeloRecoleccion(), ModeloRecoleccion()
+        self.assertIsInstance(playback, ap.Model)
+        self.assertIsInstance(playback.grid, ap.Grid)
+        self.assertIsInstance(playback.robots, ap.AgentList)
+        self.assertTrue(all(isinstance(r, ap.Agent) for r in playback.robots))
+        while not playback.finished:
+            for _ in playback.robots:
+                playback.advance_agent()
+            full.sim_step()
+            self.assertEqual(playback.t, full.t)
+            self.assertEqual(playback.cubos, full.cubos)
+            self.assertEqual([(r.posicion(), r.cargando, r.entregados) for r in playback.robots],
+                             [(r.posicion(), r.cargando, r.entregados) for r in full.robots])
+        run_model = ModeloRecoleccion()
+        run_model.run(display=False)
+        self.assertTrue(run_model.complete)
+        self.assertEqual(run_model.t, playback.t)
+        self.assertEqual(run_model.reporters['entregados'], 20)
+
     def test_collection_and_invariants(self):
         for size, robots, cubes, vision in ((3, 1, 3, 2), (10, 7, 20, 2),
                                           (20, 7, 20, 2), (100, 7, 20, 2)):
@@ -39,7 +60,7 @@ class AutomataTests(unittest.TestCase):
     def test_empty_limit_and_validation(self):
         self.assertTrue(ModeloRecoleccion(cubos=0).complete)
         model = ModeloRecoleccion(steps=1)
-        model.step()
+        model.sim_step()
         self.assertTrue(model.finished)
         self.assertFalse(model.complete)
         for kwargs in ({'tamano': 2}, {'robots': 21}, {'cubos': -1},
